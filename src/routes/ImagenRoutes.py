@@ -9,7 +9,7 @@ from src.services.ImagenService import ImagenService
 
 main = Blueprint('image_blueprint', __name__)
 
-UPLOAD_FOLDER = 'uploads'
+UPLOAD_FOLDER = '/opt/render/project/src/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB
 
@@ -43,7 +43,7 @@ def upload_image():
                 filename = secure_filename(file.filename)
 
                 # Create uploads folder if it doesn't exist
-                upload_folder = app.config.get('UPLOAD_FOLDER', 'uploads')
+                upload_folder = app.config.get('UPLOAD_FOLDER', '/opt/render/project/src/uploads')
                 os.makedirs(upload_folder, exist_ok=True)
 
                 file_path = os.path.join(upload_folder, filename)
