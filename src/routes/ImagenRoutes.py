@@ -9,7 +9,7 @@ from src.services.ImagenService import ImagenService
 
 main = Blueprint('image_blueprint', __name__)
 
-UPLOAD_FOLDER = '/opt/render/project/src/uploads'
+UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB
 
@@ -18,13 +18,14 @@ def allowed_file(filename):
 
 @main.route('/', methods=['POST'])
 def upload_image():
+    # Verificar si el token de seguridad es válido
     has_access = Security.verify_token(request.headers)
     if not has_access:
         return jsonify({'message': 'Unauthorized', 'success': False}), 401
 
     try:
-        # Comprobación de la parte de archivo en la solicitud
-        if 'files[]' not in request.files: #files[] es el nombre de la key para poder subir una imagen
+        # Verificar si hay archivos en la solicitud
+        if 'files[]' not in request.files:
             return jsonify({'message': 'No hay parte de archivo en la solicitud', 'success': False}), 400
 
         files = request.files.getlist('files[]')
@@ -32,42 +33,41 @@ def upload_image():
         errors = {}
         success = False
 
-        # Procesar cada archivo de la solicitud
         for file in files:
             if file and allowed_file(file.filename):
                 # Comprobar el tamaño del archivo
                 if file.content_length > MAX_CONTENT_LENGTH:
-                    errors[file.filename] = 'File is too large'
+                    errors[file.filename] = 'El archivo es demasiado grande'
                     continue
 
                 filename = secure_filename(file.filename)
 
-                # Create uploads folder if it doesn't exist
-                upload_folder = app.config.get('UPLOAD_FOLDER', '/opt/render/project/src/uploads')
+                # Crear la carpeta de subidas si no existe
+                upload_folder = app.config.get('UPLOAD_FOLDER', 'uploads')
                 os.makedirs(upload_folder, exist_ok=True)
 
                 file_path = os.path.join(upload_folder, filename)
                 file.save(file_path)
                 
-                # Read and encode the file
+                # Leer y codificar el archivo en base64
                 with open(file_path, "rb") as f:
                     filedata = f.read()
                 filetype = file.mimetype
                 encoded_file = b64encode(filedata).decode('utf-8')
 
-                # Use ImagenService to upload the image to the database
+                # Usar el servicio ImagenService para subir la imagen a la base de datos
                 ImagenService.upload_image(filename, encoded_file, filetype)
                 success = True
             else:
-                errors[file.filename] = 'El tipo de archivo no está permitido".'
+                errors[file.filename] = 'El tipo de archivo no está permitido'
 
         if success and errors:
-            errors['message'] = 'File(s) successfully uploaded with some errors'
+            errors['message'] = 'Archivos subidos exitosamente con algunos errores'
             resp = jsonify(errors)
-            resp.status_code = 206  # Partial Content
+            resp.status_code = 206  # Contenido Parcial
             return resp
         if success:
-            resp = jsonify({'message': 'Files successfully uploaded', 'success': True})
+            resp = jsonify({'message': 'Archivos subidos exitosamente', 'success': True})
             resp.status_code = 201
             return resp
         else:
@@ -79,5 +79,6 @@ def upload_image():
         logging.error(f"CustomException: {str(e)}")
         return jsonify({'message': str(e), 'success': False}), 500
     except Exception as e:
-        logging.error(f"Unhandled exception: {str(e)}")
-        return jsonify({'message': 'Internal Server Error', 'success': False}), 500
+        logging.error(f"Excepción no controlada: {str(e)}")
+        return jsonify({'message': 'Error Interno del Servidor', 'success': False}), 500
+
