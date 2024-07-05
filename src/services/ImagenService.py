@@ -1,25 +1,14 @@
-import cloudinary
-import cloudinary.uploader
-import cloudinary.api
 from src.database.db import get_connection
 from src.utils.errors.CustomException import CustomException
 from .models.Imagen import Imagen
 import base64
-
-# Configuración de Cloudinary
-cloudinary.config(
-    cloud_name="dwxj9p9jh",
-    api_key="781316325683796",
-    api_secret="your_api_secret",  # Reemplaza esto con tu API secret
-    secure=True
-)
 
 class ImagenService:
 
     @staticmethod
     def upload_image(filename, filedata, filetype):
         """
-        Guarda una imagen en Cloudinary y almacena la URL en la base de datos.
+        Guarda una imagen en la base de datos.
         
         :param filename: Nombre del archivo
         :param filedata: Contenido del archivo codificado en base64
@@ -35,25 +24,11 @@ class ImagenService:
             # Convertir filedata de base64 a binario
             binary_data = base64.b64decode(filedata)
 
-            # Subir la imagen a Cloudinary
-            upload_result = cloudinary.uploader.upload(
-                binary_data,
-                public_id=filename,
-                resource_type="image"
-            )
-            if not upload_result:
-                raise CustomException("Failed to upload image to Cloudinary")
-
-            # Obtener la URL de la imagen subida
-            image_url = upload_result.get("secure_url")
-            if not image_url:
-                raise CustomException("Failed to get image URL from Cloudinary response")
-
             connection = get_connection()
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "INSERT INTO uploads (filename, fileurl, filetype) VALUES (%s, %s, %s)",
-                    (filename, image_url, filetype)
+                    "INSERT INTO uploads (filename, filedata, filetype) VALUES (%s, %s, %s)",
+                    (filename, binary_data, filetype)
                 )
             connection.commit()
         except Exception as ex:
@@ -77,14 +52,14 @@ class ImagenService:
             connection = get_connection()
             images = []
             with connection.cursor() as cursor:
-                cursor.execute("SELECT id, filename, fileurl, filetype FROM uploads")
+                cursor.execute("SELECT id, filename, filetype FROM uploads")
                 resultset = cursor.fetchall()
                 for row in resultset:
                     image = Imagen(
                         id=row[0],
                         filename=row[1],
-                        filetype=row[3],
-                        fileurl=row[2]
+                        filetype=row[2],
+                        filedata=None  # No se incluye el contenido del archivo aquí
                     )
                     images.append(image.to_json())
             return images
@@ -107,14 +82,16 @@ class ImagenService:
         try:
             connection = get_connection()
             with connection.cursor() as cursor:
-                cursor.execute("SELECT id, filename, fileurl, filetype FROM uploads WHERE id = %s", (id,))
+                cursor.execute("SELECT id, filename, filetype, filedata FROM uploads WHERE id = %s", (id,))
                 row = cursor.fetchone()
                 if row:
+                    # Convertir el contenido binario a base64 para enviar como respuesta
+                    encoded_data = base64.b64encode(row[3]).decode('utf-8')
                     image = Imagen(
                         id=row[0],
                         filename=row[1],
-                        filetype=row[3],
-                        fileurl=row[2]
+                        filetype=row[2],
+                        filedata=encoded_data
                     )
                     return image.to_json()
                 else:
@@ -124,4 +101,6 @@ class ImagenService:
         finally:
             if connection:
                 connection.close()
+
+
 
